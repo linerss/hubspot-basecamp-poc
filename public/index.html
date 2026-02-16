@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HubSpot → Basecamp Integration POC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .projects-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .projects-header h2 {
+            color: #333;
+        }
+        .badge {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .project {
+            border: 2px solid #f0f0f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: border-color 0.3s;
+        }
+        .project:hover {
+            border-color: #667eea;
+        }
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+        .project-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+        .project-amount {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .project-meta {
+            color: #666;
+            font-size: 14px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 HubSpot → Basecamp</h1>
+            <p>Integration POC</p>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 20px; color: #333;">Create New Project</h2>
+            <div id="successMessage" class="success-message">
+                ✓ Project created successfully!
+            </div>
+            <form id="projectForm">
+                <div class="form-group">
+                    <label>Client Name</label>
+                    <input type="text" id="clientName" placeholder="Acme Corp" required>
+                </div>
+                <div class="form-group">
+                    <label>Deal Name</label>
+                    <input type="text" id="dealName" placeholder="Website Redesign" required>
+                </div>
+                <div class="form-group">
+                    <label>Amount ($)</label>
+                    <input type="number" id="amount" placeholder="15000" required>
+                </div>
+                <button type="submit">Create Basecamp Project</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="projects-header">
+                <h2>Projects</h2>
+                <span class="badge" id="projectCount">0</span>
+            </div>
+            <div id="projectsList">
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p>No projects yet. Create one above!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadProjects() {
+            const response = await fetch('/projects');
+            const data = await response.json();
+
+            document.getElementById('projectCount').textContent = data.total;
+
+            const projectsList = document.getElementById('projectsList');
+
+            if (data.total === 0) {
+                projectsList.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p>No projects yet. Create one above!</p>
+                    </div>
+                `;
+            } else {
+                projectsList.innerHTML = data.projects.map(project => `
+                    <div class="project">
+                        <div class="project-header">
+                            <div class="project-name">${project.name}</div>
+                            <div class="project-amount">$${project.amount.toLocaleString()}</div>
+                        </div>
+                        <div class="project-meta">
+                            Deal ID: ${project.dealId} • Created: ${new Date(project.createdAt).toLocaleString()}
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        document.getElementById('projectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const clientName = document.getElementById('clientName').value;
+            const dealName = document.getElementById('dealName').value;
+            const amount = parseInt(document.getElementById('amount').value);
+
+            const response = await fetch('/webhook/hubspot/deal-won', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    objectId: `DEMO-${Date.now()}`,
+                    dealName,
+                    clientName,
+                    amount
+                })
+            });
+
+            if (response.ok) {
+                document.getElementById('successMessage').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('successMessage').style.display = 'none';
+                }, 3000);
+
+                document.getElementById('projectForm').reset();
+                loadProjects();
+            }
+        });
+
+        // Load projects on page load
+        loadProjects();
+
+        // Refresh every 5 seconds
+        setInterval(loadProjects, 5000);
+    </script>
+</body>
+</html>
