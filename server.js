@@ -135,13 +135,34 @@ app.post('/webhook/hubspot/deal-won', async (req, res) => {
   }
 });
 
-// View all created projects
-app.get('/projects', (req, res) => {
-  const projects = getProjects();
-  res.json({
-    total: projects.length,
-    projects: projects
-  });
+// View all closed won deals from HubSpot (live source of truth)
+app.get('/projects', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    const projects = getProjects();
+    return res.json({ total: projects.length, projects });
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.hubapi.com/crm/v3/objects/deals?limit=20&properties=dealname,amount,dealstage,closedate&filterGroups=%5B%7B%22filters%22%3A%5B%7B%22propertyName%22%3A%22dealstage%22%2C%22operator%22%3A%22EQ%22%2C%22value%22%3A%22closedwon%22%7D%5D%7D%5D',
+      { headers: { 'Authorization': `Bearer ${HUBSPOT_ACCESS_TOKEN}` } }
+    );
+    const data = await response.json();
+
+    const projects = (data.results || []).map(deal => ({
+      id: deal.id,
+      name: deal.properties.dealname || 'Unnamed Deal',
+      dealId: deal.id,
+      amount: parseFloat(deal.properties.amount) || 0,
+      source: 'hubspot',
+      createdAt: deal.createdAt,
+      status: 'created'
+    }));
+
+    res.json({ total: projects.length, projects });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Test endpoint - simulate HubSpot webhook with real payload format
