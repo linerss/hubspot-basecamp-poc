@@ -57,6 +57,20 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Debug endpoint - logs raw payload from HubSpot
+const debugLog = [];
+app.post('/debug/webhook', (req, res) => {
+  const entry = { receivedAt: new Date().toISOString(), body: req.body, headers: req.headers };
+  debugLog.unshift(entry);
+  if (debugLog.length > 20) debugLog.pop();
+  console.log('DEBUG webhook received:', JSON.stringify(req.body, null, 2));
+  res.status(200).json({ received: true });
+});
+
+app.get('/debug/log', (req, res) => {
+  res.json({ count: debugLog.length, entries: debugLog });
+});
+
 // HubSpot webhook endpoint - fires on any deal stage change
 app.post('/webhook/hubspot/deal-won', async (req, res) => {
   // HubSpot sends an array of events
