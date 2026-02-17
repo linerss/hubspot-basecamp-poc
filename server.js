@@ -144,8 +144,19 @@ app.get('/projects', async (req, res) => {
 
   try {
     const response = await fetch(
-      'https://api.hubapi.com/crm/v3/objects/deals?limit=20&properties=dealname,amount,dealstage,closedate&filterGroups=%5B%7B%22filters%22%3A%5B%7B%22propertyName%22%3A%22dealstage%22%2C%22operator%22%3A%22EQ%22%2C%22value%22%3A%22closedwon%22%7D%5D%7D%5D',
-      { headers: { 'Authorization': `Bearer ${HUBSPOT_ACCESS_TOKEN}` } }
+      'https://api.hubapi.com/crm/v3/objects/deals/search',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filterGroups: [{ filters: [{ propertyName: 'dealstage', operator: 'EQ', value: 'closedwon' }] }],
+          properties: ['dealname', 'amount', 'dealstage', 'closedate'],
+          limit: 20
+        })
+      }
     );
     const data = await response.json();
 
