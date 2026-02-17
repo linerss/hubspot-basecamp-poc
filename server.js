@@ -4,6 +4,10 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN;
+const BASECAMP_CLIENT_ID = process.env.BASECAMP_CLIENT_ID;
+const BASECAMP_CLIENT_SECRET = process.env.BASECAMP_CLIENT_SECRET;
+const BASECAMP_ACCESS_TOKEN = process.env.BASECAMP_ACCESS_TOKEN;
+const BASECAMP_ACCOUNT_ID = process.env.BASECAMP_ACCOUNT_ID;
 
 // Middleware
 app.use(express.json());
@@ -112,9 +116,16 @@ app.post('/webhook/hubspot/deal-won', async (req, res) => {
         console.log(`Fetched deal from HubSpot: ${dealName}`);
       }
 
-      // Create Basecamp project (mocked for POC)
+      // Create Basecamp project (real if token available, mocked otherwise)
+      let basecampId = Date.now();
+      if (BASECAMP_ACCESS_TOKEN && BASECAMP_ACCOUNT_ID) {
+        const bc = await createBasecampProject(dealName, `HubSpot Deal - $${dealAmount.toLocaleString()}`);
+        basecampId = bc.id;
+        console.log(`✅ Created real Basecamp project: ${bc.id}`);
+      }
+
       const basecampProject = {
-        id: Date.now(),
+        id: basecampId,
         name: dealName,
         dealId: String(objectId),
         amount: dealAmount,
@@ -200,6 +211,48 @@ app.post('/test/trigger', async (req, res) => {
 
   res.json({ message: 'Test webhook triggered with real HubSpot format', event: testEvent[0] });
 });
+
+// Basecamp OAuth - start flow
+app.get('/auth/basecamp', (req, res) => {
+  const redirectUri = encodeURIComponent('https://hubspot-basecamp-poc.vercel.app/auth/callback');
+  const url = `https://launchpad.37signals.com/authorization/new?type=web_server&client_id=${BASECAMP_CLIENT_ID}&redirect_uri=${redirectUri}`;
+  res.redirect(url);
+});
+
+// Basecamp OAuth - callback, exchange code for token
+app.get('/auth/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).send('Missing code');
+
+  const tokenUrl = `https://launchpad.37signals.com/authorization/token?type=web_server&client_id=${BASECAMP_CLIENT_ID}&client_secret=${BASECAMP_CLIENT_SECRET}&redirect_uri=${encodeURIComponent('https://hubspot-basecamp-poc.vercel.app/auth/callback')}&code=${code}`;
+  const response = await fetch(tokenUrl, { method: 'POST' });
+  const data = await response.json();
+
+  res.send(`
+    <h2>Basecamp Auth Success!</h2>
+    <p><strong>Access Token:</strong> <code>${data.access_token}</code></p>
+    <p><strong>Refresh Token:</strong> <code>${data.refresh_token}</code></p>
+    <p>Copy the access token and add it to Vercel as <code>BASECAMP_ACCESS_TOKEN</code></p>
+  `);
+});
+
+// Basecamp helper: create a project
+async function createBasecampProject(name, description) {
+  const response = await fetch(
+    `https://3.basecampapi.com/${BASECAMP_ACCOUNT_ID}/projects.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${BASECAMP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'HubSpot-Basecamp-POC (linus@greyfielddata.com)'
+      },
+      body: JSON.stringify({ name, description })
+    }
+  );
+  if (!response.ok) throw new Error(`Basecamp API error: ${response.status}`);
+  return response.json();
+}
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
