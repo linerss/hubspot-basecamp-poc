@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // File-based storage (works on Vercel serverless)
 const STORAGE_FILE = path.join('/tmp', 'projects.json');
