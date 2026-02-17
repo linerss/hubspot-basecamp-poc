@@ -77,35 +77,30 @@ app.get('/debug/log', (req, res) => {
 
 // HubSpot webhook endpoint - fires on any deal stage change
 app.post('/webhook/hubspot/deal-won', async (req, res) => {
-  // HubSpot sends an array of events
   const events = Array.isArray(req.body) ? req.body : [req.body];
-
   console.log(`Received ${events.length} HubSpot event(s)`);
 
-  // Respond immediately to HubSpot (must respond within 20 seconds)
-  res.status(200).json({ received: true });
+  const results = [];
 
-  // Process each event
+  // Process ALL events before responding (Vercel shuts down after response)
   for (const event of events) {
     const { objectId, propertyName, propertyValue, subscriptionType } = event;
-
     console.log(`Event: ${subscriptionType} | Deal ${objectId} | ${propertyName} = ${propertyValue}`);
 
-    // Only act on deals moving to "closedwon"
     if (propertyName !== 'dealstage' || propertyValue !== 'closedwon') {
       console.log(`Ignored - not a closed won event`);
+      results.push({ dealId: objectId, status: 'ignored' });
       continue;
     }
 
-    // Check for duplicates
     const existing = getProjects();
     if (existing.find(p => p.dealId === String(objectId))) {
       console.log(`Duplicate detected - project for deal ${objectId} already exists`);
+      results.push({ dealId: objectId, status: 'duplicate' });
       continue;
     }
 
     try {
-      // Fetch full deal details from HubSpot
       let dealName = 'New Project';
       let dealAmount = 0;
 
@@ -116,7 +111,6 @@ app.post('/webhook/hubspot/deal-won', async (req, res) => {
         console.log(`Fetched deal from HubSpot: ${dealName}`);
       }
 
-      // Create Basecamp project (real if token available, mocked otherwise)
       let basecampId = Date.now();
       if (BASECAMP_ACCESS_TOKEN && BASECAMP_ACCOUNT_ID) {
         const bc = await createBasecampProject(dealName, `HubSpot Deal - $${dealAmount.toLocaleString()}`);
@@ -138,12 +132,17 @@ app.post('/webhook/hubspot/deal-won', async (req, res) => {
       projects.push(basecampProject);
       saveProjects(projects);
 
-      console.log(`✅ Created Basecamp project: ${basecampProject.name}`);
+      results.push({ dealId: objectId, status: 'created', name: dealName, basecampId });
+      console.log(`✅ Done: ${basecampProject.name}`);
 
     } catch (error) {
       console.error(`Failed to process deal ${objectId}:`, error.message);
+      results.push({ dealId: objectId, status: 'error', error: error.message });
     }
   }
+
+  // Respond only after all processing is complete
+  res.status(200).json({ received: true, results });
 });
 
 // View all closed won deals from HubSpot (live source of truth)
